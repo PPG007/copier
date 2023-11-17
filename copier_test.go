@@ -1,6 +1,7 @@
 package copier
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
@@ -221,6 +222,26 @@ func TestMultiField(t *testing.T) {
 	}).From(s5).To(&s6)
 	assert.NoError(t, err)
 	assert.Equal(t, s5.S1.Id, s6.S5.S1.Id)
+}
+
+func TestMultiFieldWithTransformer(t *testing.T) {
+	s5 := S5{
+		S1: S1{
+			Id:        "123",
+			CreatedAt: time.Now(),
+		},
+	}
+	s6 := S6{}
+	err := New(true).RegisterDiffPairs([]DiffPair{
+		{
+			Origin: "S1.Id",
+			Target: []string{"S5.S1.Id"},
+		},
+	}).RegisterTransformer("S5.S1.Id", func(id string) string {
+		return fmt.Sprintf("test_%s", id)
+	}).From(s5).To(&s6)
+	assert.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("test_%s", s5.S1.Id), s6.S5.S1.Id)
 }
 
 func TestPartialCopy(t *testing.T) {
