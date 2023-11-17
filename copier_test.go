@@ -1,1 +1,238 @@
 package copier
+
+import (
+	"github.com/stretchr/testify/assert"
+	"strconv"
+	"testing"
+	"time"
+)
+
+type S1 struct {
+	Id        string
+	CreatedAt time.Time
+}
+
+type S2 struct {
+	Id        int
+	CreatedAt string
+	Id2       int
+}
+
+type S3 struct {
+	Embedded S1
+}
+
+type S4 struct {
+	Embedded S2
+	S2       S2
+}
+
+func TestStruct2Struct(t *testing.T) {
+	s1 := S1{
+		Id:        "id1",
+		CreatedAt: time.Now(),
+	}
+	s2 := S2{}
+	err := New(true).RegisterConverter(TimeStringConverter).From(s1).To(&s2)
+	assert.NoError(t, err)
+	assert.Zero(t, s2.Id)
+	assert.Equal(t, s1.CreatedAt.Format(time.RFC3339), s2.CreatedAt)
+}
+
+func TestEmbeddedStruct(t *testing.T) {
+	s3 := S3{
+		Embedded: S1{
+			Id:        "test",
+			CreatedAt: time.Now(),
+		},
+	}
+	s4 := S4{}
+	err := New(true).RegisterConverter(TimeStringConverter).From(s3).To(&s4)
+	assert.NoError(t, err)
+	assert.Equal(t, s3.Embedded.CreatedAt.Format(time.RFC3339), s4.Embedded.CreatedAt)
+}
+
+func TestEmbeddedDiffPair(t *testing.T) {
+	s3 := S3{
+		Embedded: S1{
+			Id:        "test",
+			CreatedAt: time.Now(),
+		},
+	}
+	s4 := S4{}
+	err := New(true).
+		RegisterDiffPairs([]DiffPair{
+			{
+				Origin: "Embedded",
+				Target: []string{"Embedded", "S2"},
+			},
+		}).
+		RegisterConverter(TimeStringConverter).
+		From(s3).
+		To(&s4)
+	assert.NoError(t, err)
+	assert.Equal(t, s3.Embedded.CreatedAt.Format(time.RFC3339), s4.Embedded.CreatedAt)
+	assert.Equal(t, s3.Embedded.CreatedAt.Format(time.RFC3339), s4.S2.CreatedAt)
+}
+
+func TestTransformer(t *testing.T) {
+	s1 := S1{
+		Id:        "123",
+		CreatedAt: time.Date(2023, time.February, 1, 0, 0, 0, 0, time.Local),
+	}
+	s2 := S2{}
+	err := New(true).RegisterTransformer("Id", func(id string) int {
+		n, _ := strconv.ParseInt(id, 10, 64)
+		return int(n)
+	}).RegisterTransformer("CreatedAt", func(createdAt time.Time) string {
+		return createdAt.Format("2006")
+	}).From(s1).To(&s2)
+	assert.NoError(t, err)
+	assert.Equal(t, 123, s2.Id)
+	assert.Equal(t, "2023", s2.CreatedAt)
+}
+
+func TestTransformerAndDiffPair(t *testing.T) {
+	s1 := S1{
+		Id:        "1",
+		CreatedAt: time.Now(),
+	}
+	s2 := S2{}
+	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+		{
+			Origin: "Id",
+			Target: []string{"Id2"},
+		},
+	}).RegisterTransformer("Id2", func(id string) int {
+		n, _ := strconv.ParseInt(id, 10, 64)
+		return int(n)
+	}).From(s1).To(&s2)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, s2.Id2)
+	assert.Equal(t, 0, s2.Id)
+}
+
+func TestTimeSlice2StringSlice(t *testing.T) {
+	copier := New(false)
+	copier.RegisterConverter(TimeStringConverter)
+	t1 := time.Now()
+	t2 := time.Now().AddDate(1, 2, 3)
+	timeSlice := []time.Time{t1, t2}
+	strSlice := make([]string, 0)
+	err := copier.From(timeSlice).To(&strSlice)
+	assert.NoError(t, err)
+	assert.Len(t, strSlice, 2)
+	assert.Equal(t, t1.Format(time.RFC3339), strSlice[0])
+	assert.Equal(t, t2.Format(time.RFC3339), strSlice[1])
+}
+
+func TestStringSlice2TimeSlice(t *testing.T) {
+	copier := New(false)
+	copier.RegisterConverter(StringTimeConverter)
+	t1 := time.Now()
+	t2 := time.Now().AddDate(1, 2, 3)
+	timeSlice := make([]*time.Time, 0)
+	strSlice := []string{
+		t1.Format(time.RFC3339),
+		t2.Format(time.RFC3339),
+	}
+	err := copier.From(strSlice).To(&timeSlice)
+	assert.NoError(t, err)
+	assert.Len(t, timeSlice, 2)
+	assert.Equal(t, t1.Unix(), timeSlice[0].Unix())
+	assert.Equal(t, t2.Unix(), timeSlice[1].Unix())
+}
+
+func TestStructSlice(t *testing.T) {
+	slice1 := []S1{
+		{
+			Id:        "1",
+			CreatedAt: time.Now(),
+		},
+		{
+			Id:        "2",
+			CreatedAt: time.Now().AddDate(1, 0, 0),
+		},
+	}
+	var slice2 []S2
+	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+		{
+			Origin: "Id",
+			Target: []string{"Id2"},
+		},
+	}).RegisterTransformer("Id2", func(id string) int {
+		n, _ := strconv.ParseInt(id, 10, 64)
+		return int(n)
+	}).From(slice1).To(&slice2)
+	assert.NoError(t, err)
+	assert.Equal(t, len(slice1), len(slice2))
+	assert.Equal(t, 1, slice2[0].Id2)
+	assert.Equal(t, 2, slice2[1].Id2)
+}
+
+func TestStructPtrSlice(t *testing.T) {
+	slice1 := []S1{
+		{
+			Id:        "1",
+			CreatedAt: time.Now(),
+		},
+		{
+			Id:        "2",
+			CreatedAt: time.Now().AddDate(1, 0, 0),
+		},
+	}
+	var slice2 []*S2
+	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+		{
+			Origin: "Id",
+			Target: []string{"Id2"},
+		},
+	}).RegisterTransformer("Id2", func(id string) int {
+		n, _ := strconv.ParseInt(id, 10, 64)
+		return int(n)
+	}).From(slice1).To(&slice2)
+	assert.NoError(t, err)
+	assert.Equal(t, len(slice1), len(slice2))
+	assert.Equal(t, 1, slice2[0].Id2)
+	assert.Equal(t, 2, slice2[1].Id2)
+}
+
+type S5 struct {
+	S1 S1
+}
+
+type S6 struct {
+	S5 S5
+}
+
+func TestMultiField(t *testing.T) {
+	s5 := S5{
+		S1: S1{
+			Id:        "123",
+			CreatedAt: time.Now(),
+		},
+	}
+	s6 := S6{}
+	err := New(true).RegisterDiffPairs([]DiffPair{
+		{
+			Origin: "S1.Id",
+			Target: []string{"S5.S1.Id"},
+		},
+	}).From(s5).To(&s6)
+	assert.NoError(t, err)
+	assert.Equal(t, s5.S1.Id, s6.S5.S1.Id)
+}
+
+func TestPartialCopy(t *testing.T) {
+	s5 := S5{
+		S1: S1{
+			Id:        "123",
+			CreatedAt: time.Now(),
+		},
+	}
+	s6 := S6{}
+	err := New(true).From(s5.S1).To(&(s6.S5.S1))
+	assert.NoError(t, err)
+	assert.Equal(t, s5.S1.Id, s6.S5.S1.Id)
+	assert.Equal(t, s5.S1.CreatedAt, s6.S5.S1.CreatedAt)
+}
