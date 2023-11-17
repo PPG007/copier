@@ -137,6 +137,26 @@ copier.New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]copi
 }).From(slice1).To(&slice2)
 ```
 
+`RegisterDiffPairs()` support nested fields, and `RegisterTransformer()` support this when the nested field is defined in `RegisterDiffPairs()`:
+
+```go
+s5 := S5{
+    S1: S1{
+        Id:        "123",
+        CreatedAt: time.Now(),
+    },
+}
+s6 := S6{}
+err := copier.New(true).RegisterDiffPairs([]copier.DiffPair{
+    {
+        Origin: "S1.Id",
+        Target: []string{"S5.S1.Id"},
+    },
+}).RegisterTransformer("S5.S1.Id", func(id string) string {
+    return fmt.Sprintf("test_%s", id)
+}).From(s5).To(&s6)
+```
+
 ## Examples
 
 You can find more examples in [copier_test.go](./copier_test.go).

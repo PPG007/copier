@@ -198,6 +198,13 @@ func (c *Copier) setMultiLevelFields(from reflect.Value, to reflect.Value, toTyp
 			if strings.ContainsAny(origin, ".") || strings.ContainsAny(target, ".") {
 				fromFieldValue := getValueByFieldPath(origin, from)
 				toFieldValue := getValueByFieldPath(target, to)
+				if transformer, found := c.transformers[target]; found {
+					fn := reflect.ValueOf(transformer)
+					args := []reflect.Value{fromFieldValue}
+					returnValue := fn.Call(args)[0]
+					toFieldValue.Set(returnValue)
+					continue
+				}
 				err := c.copyValue(fromFieldValue, toFieldValue, toFieldValue.Type())
 				if err != nil {
 					return err
