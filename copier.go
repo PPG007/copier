@@ -41,6 +41,7 @@ type Copier struct {
 	diffPairs       map[string][]string
 	transformers    map[string]interface{}
 	ignoreTypeError bool
+	ignoreZeroValue bool
 }
 
 type ConverterFunc = func(fromValue reflect.Value, toType reflect.Type) (toValue reflect.Value, err error)
@@ -56,11 +57,23 @@ type DiffPair struct {
 	Target []string
 }
 
-func New(ignoreTypeError bool) *Copier {
+type Option func(c *Copier)
+
+func IgnoreTypeError(c *Copier) {
+	c.ignoreTypeError = true
+}
+
+func IgnoreZeroValue(c *Copier) {
+	c.ignoreZeroValue = true
+}
+
+func New(options ...Option) *Copier {
 	c := new(Copier)
 	c.transformers = make(map[string]interface{})
 	c.diffPairs = make(map[string][]string)
-	c.ignoreTypeError = true
+	for _, opt := range options {
+		opt(c)
+	}
 	return c
 }
 
@@ -125,6 +138,9 @@ func (c *Copier) To(target interface{}) error {
 }
 
 func (c *Copier) copyValue(from reflect.Value, to reflect.Value, toType reflect.Type) error {
+	if from.Kind() != reflect.Ptr && from.IsZero() {
+		return nil
+	}
 	v, err := c.getTargetValue(getRealValue(from), getRealValue(to), getRealType(toType))
 	if err != nil {
 		return err

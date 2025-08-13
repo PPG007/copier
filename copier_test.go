@@ -44,7 +44,7 @@ func TestStruct2Struct(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	s2 := S2{}
-	err := New(true).RegisterConverter(TimeStringConverter).From(s1).To(&s2)
+	err := New(IgnoreTypeError).RegisterConverter(TimeStringConverter).From(s1).To(&s2)
 	assert.NoError(t, err)
 	assert.Zero(t, s2.Id)
 	assert.Equal(t, s1.CreatedAt.Format(time.RFC3339), s2.CreatedAt)
@@ -58,7 +58,7 @@ func TestEmbeddedStruct(t *testing.T) {
 		},
 	}
 	s4 := S4{}
-	err := New(true).RegisterConverter(TimeStringConverter).From(s3).To(&s4)
+	err := New(IgnoreTypeError).RegisterConverter(TimeStringConverter).From(s3).To(&s4)
 	assert.NoError(t, err)
 	assert.Equal(t, s3.Embedded.CreatedAt.Format(time.RFC3339), s4.Embedded.CreatedAt)
 }
@@ -71,7 +71,7 @@ func TestEmbeddedDiffPair(t *testing.T) {
 		},
 	}
 	s4 := S4{}
-	err := New(true).
+	err := New(IgnoreTypeError).
 		RegisterDiffPairs([]DiffPair{
 			{
 				Origin: "Embedded",
@@ -92,7 +92,7 @@ func TestTransformer(t *testing.T) {
 		CreatedAt: time.Date(2023, time.February, 1, 0, 0, 0, 0, time.Local),
 	}
 	s2 := S2{}
-	err := New(true).RegisterTransformer("Id", func(id string) int {
+	err := New(IgnoreTypeError).RegisterTransformer("Id", func(id string) int {
 		n, _ := strconv.ParseInt(id, 10, 64)
 		return int(n)
 	}).RegisterTransformer("CreatedAt", func(createdAt time.Time) string {
@@ -109,7 +109,7 @@ func TestTransformerAndDiffPair(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	s2 := S2{}
-	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+	err := New(IgnoreTypeError).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
 		{
 			Origin: "Id",
 			Target: []string{"Id2"},
@@ -124,7 +124,7 @@ func TestTransformerAndDiffPair(t *testing.T) {
 }
 
 func TestTimeSlice2StringSlice(t *testing.T) {
-	copier := New(false)
+	copier := New()
 	copier.RegisterConverter(TimeStringConverter)
 	t1 := time.Now()
 	t2 := time.Now().AddDate(1, 2, 3)
@@ -138,7 +138,7 @@ func TestTimeSlice2StringSlice(t *testing.T) {
 }
 
 func TestStringSlice2TimeSlice(t *testing.T) {
-	copier := New(false)
+	copier := New()
 	copier.RegisterConverter(StringTimeConverter)
 	t1 := time.Now()
 	t2 := time.Now().AddDate(1, 2, 3)
@@ -166,7 +166,7 @@ func TestStructSlice(t *testing.T) {
 		},
 	}
 	var slice2 []S2
-	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+	err := New(IgnoreTypeError).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
 		{
 			Origin: "Id",
 			Target: []string{"Id2"},
@@ -193,7 +193,7 @@ func TestStructPtrSlice(t *testing.T) {
 		},
 	}
 	var slice2 []*S2
-	err := New(true).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
+	err := New(IgnoreTypeError).RegisterConverter(TimeStringConverter).RegisterDiffPairs([]DiffPair{
 		{
 			Origin: "Id",
 			Target: []string{"Id2"},
@@ -224,7 +224,7 @@ func TestMultiField(t *testing.T) {
 		},
 	}
 	s6 := S6{}
-	err := New(true).RegisterDiffPairs([]DiffPair{
+	err := New(IgnoreTypeError).RegisterDiffPairs([]DiffPair{
 		{
 			Origin: "S1.Id",
 			Target: []string{"S5.S1.Id"},
@@ -242,7 +242,7 @@ func TestMultiFieldWithTransformer(t *testing.T) {
 		},
 	}
 	s6 := S6{}
-	err := New(true).RegisterDiffPairs([]DiffPair{
+	err := New(IgnoreTypeError).RegisterDiffPairs([]DiffPair{
 		{
 			Origin: "S1.Id",
 			Target: []string{"S5.S1.Id"},
@@ -262,7 +262,7 @@ func TestPartialCopy(t *testing.T) {
 		},
 	}
 	s6 := S6{}
-	err := New(true).From(s5.S1).To(&(s6.S5.S1))
+	err := New(IgnoreTypeError).From(s5.S1).To(&(s6.S5.S1))
 	assert.NoError(t, err)
 	assert.Equal(t, s5.S1.Id, s6.S5.S1.Id)
 	assert.Equal(t, s5.S1.CreatedAt, s6.S5.S1.CreatedAt)
@@ -275,7 +275,7 @@ func TestCopyWithPointer(t *testing.T) {
 	}
 	to := S1WithPointer{}
 	fn := func() {
-		err := New(true).From(from).To(&to)
+		err := New(IgnoreTypeError).From(from).To(&to)
 		assert.NoError(t, err)
 		assert.NotNil(t, to.Id)
 		assert.Equal(t, from.Id, *to.Id)
@@ -294,11 +294,25 @@ func TestCopyWithStructPointer(t *testing.T) {
 	}
 	to := S3WithPointer{}
 	fn := func() {
-		err := New(true).From(from).To(&to)
+		err := New(IgnoreTypeError).From(from).To(&to)
 		assert.NoError(t, err)
 		assert.NotNil(t, to.Embedded)
 		assert.Equal(t, from.Embedded.Id, to.Embedded.Id)
 		assert.Equal(t, from.Embedded.CreatedAt, to.Embedded.CreatedAt)
+	}
+	assert.NotPanics(t, fn)
+}
+
+func TestCopyEmptyStrToTime(t *testing.T) {
+	from := S2{}
+	to := S1{}
+	fn := func() {
+		err := New(
+			IgnoreTypeError,
+			IgnoreZeroValue,
+		).RegisterConverter(StringTimeConverter).From(from).To(&to)
+		assert.NoError(t, err)
+		assert.True(t, to.CreatedAt.IsZero())
 	}
 	assert.NotPanics(t, fn)
 }
