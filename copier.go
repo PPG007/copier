@@ -138,7 +138,7 @@ func (c *Copier) To(target interface{}) error {
 }
 
 func (c *Copier) copyValue(from reflect.Value, to reflect.Value, toType reflect.Type) error {
-	if from.Kind() != reflect.Ptr && from.IsZero() {
+	if from.IsZero() {
 		return nil
 	}
 	v, err := c.getTargetValue(getRealValue(from), getRealValue(to), getRealType(toType))
