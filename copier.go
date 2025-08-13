@@ -151,7 +151,7 @@ func (c *Copier) getTargetValue(from reflect.Value, to reflect.Value, toType ref
 	} else if from.Kind() == reflect.Slice && toType.Kind() == reflect.Slice {
 		return c.getSliceTargetValue(from, toType)
 	}
-	err := errors.New(fmt.Sprintf("cannot convert value from %s to %s", from.Type().Name(), toType.Name()))
+	err := fmt.Errorf("cannot convert value from %s to %s", from.Type().Name(), toType.Name())
 	if c.ignoreTypeError {
 		err = nil
 	}
@@ -171,6 +171,9 @@ func (c *Copier) getStructTargetValue(from reflect.Value, to reflect.Value, toTy
 				toField, ok := toFieldsMap[targetFieldName]
 				if ok {
 					toValue := to.FieldByName(toField.Name)
+					if toValue.Kind() == reflect.Ptr && toValue.IsNil() {
+						toValue.Set(reflect.New(toValue.Type().Elem()))
+					}
 					if toValue.IsValid() {
 						sourceValue := fromValue
 						if transformer, found := c.transformers[toField.Name]; found {

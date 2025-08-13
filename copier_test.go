@@ -2,15 +2,21 @@ package copier
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type S1 struct {
 	Id        string
 	CreatedAt time.Time
+}
+
+type S1WithPointer struct {
+	Id        *string
+	CreatedAt *time.Time
 }
 
 type S2 struct {
@@ -21,6 +27,10 @@ type S2 struct {
 
 type S3 struct {
 	Embedded S1
+}
+
+type S3WithPointer struct {
+	Embedded *S1
 }
 
 type S4 struct {
@@ -256,4 +266,39 @@ func TestPartialCopy(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, s5.S1.Id, s6.S5.S1.Id)
 	assert.Equal(t, s5.S1.CreatedAt, s6.S5.S1.CreatedAt)
+}
+
+func TestCopyWithPointer(t *testing.T) {
+	from := S1{
+		Id:        "123",
+		CreatedAt: time.Now(),
+	}
+	to := S1WithPointer{}
+	fn := func() {
+		err := New(true).From(from).To(&to)
+		assert.NoError(t, err)
+		assert.NotNil(t, to.Id)
+		assert.Equal(t, from.Id, *to.Id)
+		assert.NotNil(t, to.CreatedAt)
+		assert.Equal(t, from.CreatedAt, *to.CreatedAt)
+	}
+	assert.NotPanics(t, fn)
+}
+
+func TestCopyWithStructPointer(t *testing.T) {
+	from := S3{
+		Embedded: S1{
+			Id:        "123",
+			CreatedAt: time.Now(),
+		},
+	}
+	to := S3WithPointer{}
+	fn := func() {
+		err := New(true).From(from).To(&to)
+		assert.NoError(t, err)
+		assert.NotNil(t, to.Embedded)
+		assert.Equal(t, from.Embedded.Id, to.Embedded.Id)
+		assert.Equal(t, from.Embedded.CreatedAt, to.Embedded.CreatedAt)
+	}
+	assert.NotPanics(t, fn)
 }
